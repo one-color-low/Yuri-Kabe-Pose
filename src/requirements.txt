@@ -1,0 +1,4 @@
+uWSGI
+flask
+flask-sqlalchemy
+requests
