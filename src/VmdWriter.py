@@ -7,14 +7,15 @@ class VmdBoneFrame():
     def __init__(self):
         self.name = ''
         self.frame = 0
-        self.position = QVector3D(0, 0, 0)
+        self.position = QVector3D(0, 0, 0)  
+        self.position = QVector3D(0, 0, 0) # センターのみで使用(グローバル座標的な)
         self.rotation = QQuaternion()
 
     def write(self, fout):
         fout.write(self.name)
         fout.write(bytearray([0 for i in range(len(self.name), 15)])) # ボーン名15Byteの残りを\0で埋める
-        fout.write(struct.pack('<L', self.frame))
-        fout.write(struct.pack('<f', self.position.x()))
+        fout.write(struct.pack('<L', self.frame))           # 「<」: リトルエンディアン、「L」: unsigned long
+        fout.write(struct.pack('<f', self.position.x()))    # 「f」: float
         fout.write(struct.pack('<f', self.position.y()))
         fout.write(struct.pack('<f', self.position.z()))
         v = self.rotation.toVector4D()

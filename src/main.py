@@ -1,5 +1,5 @@
 from flask import Flask, request, url_for
-from pos2vmd import positions_to_frames, make_showik_frames, convert_position, convert_position_mmpose, convert_position_mediapipe
+from pos2vmd import positions_to_frames, make_showik_frames, convert_position, convert_position_mmpose, convert_position_mediapipe, convert_position_33, positions_33_to_frames
 from VmdWriter import VmdWriter
 import pickle
 import requests
@@ -28,12 +28,15 @@ def pos2vmd():
 
     i = 0
     for frame in json:
-        # keypoints_3d = frame['keypoints3D'] # p.htmlで使用
         keypoints_3d = frame # p_cam.htmlで使用
-        positions = convert_position_mediapipe(keypoints_3d) # positionsをQVector3Dの配列に変換
+        #positions = convert_position_mediapipe(keypoints_3d) # positionsをQVector3Dの配列に変換
+        positions = convert_position_33(keypoints_3d)
+        print("-----------------")
+        print(keypoints_3d)
+        print("-----------------")
         positions_list.append(positions)
         visibility_list.append(visibility)
-        print("frame ", i, ":", positions)
+        #print("frame ", i, ":", positions)
         i = i+1
 
     # VMD化(フレームごとにfor)
@@ -42,7 +45,8 @@ def pos2vmd():
         if positions is None:
             frame_num += 1
             continue
-        bf = positions_to_frames(positions, visibility, frame_num, center_enabled)
+        #bf = positions_to_frames(positions, visibility, frame_num, center_enabled)
+        bf = positions_33_to_frames(positions, visibility, frame_num, center_enabled)
         bone_frames.extend(bf)
         frame_num += 1
 

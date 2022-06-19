@@ -3,202 +3,13 @@
 #
 # pos2vmd.py - convert joint position data to VMD
 
+# yuta: mediapipe用に最適化したバージョンです。s
+
 from __future__ import print_function
-from turtle import forward
 
 from PyQt5.QtGui import QQuaternion, QVector3D
 from VmdWriter import VmdBoneFrame, VmdInfoIk, VmdShowIkFrame
 import numpy as np
-
-def positions_33_to_frames(pos, vis, frame_num=0, center_enabled=False, head_rotation=None):
-
-    # 補完点を追加( 中点=(A+B)/2 )
-    pos_upper_torso = (pos[11]+pos[12])/2 # liftingの「8」
-    pos_bottom_torso = (pos[23]+pos[24])/2 # liftingの「0」
-    pos_center_torso = (pos_upper_torso+pos_bottom_torso)/2 # liftingの「7」
-    pos_center_mouth = (pos[9]+pos[10])/2
-    pos_neck_base = (pos_center_mouth+pos_upper_torso)/2 # liftingの「9」
-
-    """convert positions to bone frames"""
-    # この段階でposはMMDの座標系になっている前提(かつMMD用に正規化)
-    frames = []
-    if len(pos) < 33:
-        return frames
-    
-
-    # センター(Spine) -> mp対応済み
-    if center_enabled:
-        bf = VmdBoneFrame()
-        bf.name = b'\x83\x5a\x83\x93\x83\x5e\x81\x5b' # 'センター'
-        bf.frame = frame_num
-        bf.position = [0, 0, 0]
-        frames.append(bf)
-
-
-    # 上半身(Chest) -> mp対応済み
-    bf = VmdBoneFrame()
-    bf.name = b'\x8f\xe3\x94\xbc\x90\x67' # '上半身'
-    bf.frame = frame_num
-    rest_rotation = QQuaternion.fromDirection(QVector3D(0, 1, 0), QVector3D(0, 0, 1))
-
-    forward = pos_upper_torso - pos_center_torso
-    upward = QVector3D.crossProduct(forward, (pos[12] - pos[11]) ).normalized()
-    pose_rotation = QQuaternion.fromDirection(forward, upward)
-    #pose_rotation = rest_rotation
-    
-    bf.rotation = pose_rotation * rest_rotation.inverted() 
-    frames.append(bf)
-    
-
-    # 下半身(Hip) -> mp対応済み
-    bf = VmdBoneFrame()
-    bf.name = b'\x89\xba\x94\xbc\x90\x67' # '下半身'
-    bf.frame = frame_num
-    rest_rotation = QQuaternion.fromDirection(QVector3D(0, -1, 0), QVector3D(0, 0, 1))
-
-    forward = pos_bottom_torso - pos_center_torso
-    upward = QVector3D.crossProduct(forward, pos[23] - pos[24])
-    pose_rotation = QQuaternion.fromDirection(forward, upward)
-
-    bf.rotation = pose_rotation * rest_rotation.inverted()
-    frames.append(bf)
-
-
-    # 首は回転させず、頭のみ回転させる
-    # 頭 -> mp対応スキップ
-    bf = VmdBoneFrame()
-    bf.name = b'\x93\xaa' # '頭'
-    bf.frame = frame_num
-    rest_rotation = QQuaternion.fromDirection(QVector3D(0, 1, 0), QVector3D(1, 0, 0))
-
-    forward = pos[0] - pos_upper_torso
-    upward = QVector3D.crossProduct(pos[0] - pos_center_mouth, pos_center_mouth - pos_upper_torso)
-    #pose_rotation = QQuaternion.fromDirection(forward, upward)
-    pose_rotation = rest_rotation # 頭の回転をmediapipeで求めるのは難しいので一旦スキップ(kalidoを参考にしたい)
-
-    bf.rotation = pose_rotation * rest_rotation.inverted()
-    frames.append(bf)
-        
-
-    # 左腕(Left Upper Arm) -> mp対応済み
-    bf = VmdBoneFrame()
-    bf.name = b'\x8d\xb6\x98\x72' # '左腕'
-    bf.frame = frame_num
-    rest_rotation = QQuaternion.fromDirection(QVector3D(1.73, -1, 0), QVector3D(1, 1.73, 0))
-
-    forward = pos[13] - pos[11] # 終点 - 始点
-    upward = QVector3D.crossProduct((pos[13] - pos[11]), (pos[15] - pos[13])) # 肘->肩ベクトル to 肘->手首ベクトル の外積の向き(右ねじ)がrest状態のupward
-    pose_rotation = QQuaternion.fromDirection(forward, upward)
-    #pose_rotation = rest_rotation
-
-    bf.rotation = pose_rotation * rest_rotation.inverted()
-    frames.append(bf)
-    
-
-    # 左ひじ(Left Lower Arm) -> mp対応済み
-    bf = VmdBoneFrame()
-    bf.name = b'\x8d\xb6\x82\xd0\x82\xb6' # '左ひじ'
-    rest_rotation = QQuaternion.fromDirection(QVector3D(1.73, -1, 0), QVector3D(1, 1.73, 0))
-
-    forward = pos[15] - pos[13]
-    upward = QVector3D.crossProduct((pos[13] - pos[11]), (pos[15] - pos[13]))
-    pose_rotation = QQuaternion.fromDirection(forward, upward)
-    #pose_rotation = rest_rotation
-
-    bf.rotation = pose_rotation * rest_rotation.inverted()
-    frames.append(bf)
-
-    
-    # 右腕 -> mp対応済み
-    bf = VmdBoneFrame()
-    bf.name = b'\x89\x45\x98\x72' # '右腕'
-    bf.frame = frame_num
-    rest_rotation = QQuaternion.fromDirection(QVector3D(-1.73, -1, 0), QVector3D(1, -1.73, 0))
-
-    forward = pos[14] - pos[12] # 終点 - 始点
-    upward = QVector3D.crossProduct((pos[14] - pos[12]), (pos[16] - pos[14]))
-    pose_rotation = QQuaternion.fromDirection(forward, upward)
-    #pose_rotation = rest_rotation
-    
-    bf.rotation = pose_rotation * rest_rotation.inverted()
-    frames.append(bf)
-
-    
-    # 右ひじ -> mp対応済み
-    bf = VmdBoneFrame()
-    bf.name = b'\x89\x45\x82\xd0\x82\xb6' # '右ひじ'
-    bf.frame = frame_num
-    rest_rotation = QQuaternion.fromDirection(QVector3D(-1.73, -1, 0), QVector3D(1, -1.73, 0))
-
-    forward = pos[16] - pos[14]
-    upward = QVector3D.crossProduct((pos[14] - pos[12]), (pos[16] - pos[14]))
-    pose_rotation = QQuaternion.fromDirection(forward, upward)
-    #pose_rotation = rest_rotation
-
-    bf.rotation = pose_rotation * rest_rotation.inverted()
-    frames.append(bf)
-
-
-    # 左足
-    bf = VmdBoneFrame()
-    bf.name = b'\x8d\xb6\x91\xab' # '左足'
-    bf.frame = frame_num
-    rest_rotation = QQuaternion.fromDirection(QVector3D(0, -1, 0), QVector3D(-1, 0, 0))
-
-    forward = pos[25] - pos[23]
-    upward = QVector3D.crossProduct(pos[25] - pos[23], pos[27] - pos[25])
-    pose_rotation = QQuaternion.fromDirection(forward, upward)
-    #pose_rotation = rest_rotation
-
-    bf.rotation = pose_rotation * rest_rotation.inverted()
-    frames.append(bf)
-    
-
-    # 左ひざ
-    bf = VmdBoneFrame()
-    bf.name = b'\x8d\xb6\x82\xd0\x82\xb4' # '左ひざ'
-    bf.frame = frame_num
-    rest_rotation = QQuaternion.fromDirection(QVector3D(0, -1, 0), QVector3D(-1, 0, 0))
-
-    forward = pos[27] - pos[25]
-    upward = QVector3D.crossProduct(pos[25] - pos[23], pos[27] - pos[25])
-    pose_rotation = QQuaternion.fromDirection(forward, upward)
-    #pose_rotation = rest_rotation
-
-    bf.rotation = pose_rotation * rest_rotation.inverted()
-    frames.append(bf)
-
-
-    # 右足
-    bf = VmdBoneFrame()
-    bf.name = b'\x89\x45\x91\xab' # '右足'
-    bf.frame = frame_num
-    rest_rotation = QQuaternion.fromDirection(QVector3D(0, -1, 0), QVector3D(-1, 0, 0))
-
-    forward = pos[26] - pos[24]
-    upward = QVector3D.crossProduct(pos[26] - pos[24], pos[28] - pos[26])
-    pose_rotation = QQuaternion.fromDirection(forward, upward)
-    #pose_rotation = rest_rotation
-
-    bf.rotation = pose_rotation * rest_rotation.inverted()
-    frames.append(bf)
-    
-
-    # 右ひざ
-    bf = VmdBoneFrame()
-    bf.name = b'\x89\x45\x82\xd0\x82\xb4' # '右ひざ'
-    bf.frame = frame_num
-    rest_rotation = QQuaternion.fromDirection(QVector3D(0, -1, 0), QVector3D(-1, 0, 0))
-
-    forward = pos[28] - pos[26]
-    upward = QVector3D.crossProduct(pos[26] - pos[24], pos[28] - pos[26])
-    pose_rotation = QQuaternion.fromDirection(forward, upward)
-    pose_rotation = rest_rotation
-
-    bf.rotation = pose_rotation * rest_rotation.inverted()
-    frames.append(bf)
-
-    return frames
 
 def positions_to_frames(pos, vis, frame_num=0, center_enabled=False, head_rotation=None):
     """convert positions to bone frames"""
@@ -219,10 +30,8 @@ def positions_to_frames(pos, vis, frame_num=0, center_enabled=False, head_rotati
     bf.name = b'\x8f\xe3\x94\xbc\x90\x67' # '上半身'
     bf.frame = frame_num
     direction = pos[8] - pos[7]
-    up = QVector3D.crossProduct(direction, (pos[14] - pos[11])).normalized() # crossProduct = 外積。第1引数 → 第2引数 への右ねじが外積だとすると、背面がup?
-    upper_body_orientation = QQuaternion.fromDirection(direction, up) 
-    initial = QQuaternion.fromDirection(QVector3D(0, 1, 0), QVector3D(0, 0, 1)) # 上半身について、+yを正面、+zを上と定義
-    bf.rotation = upper_body_orientation * initial.inverted() # initialを基準としてu_b_oがどれくらい回転しているか
+    initial = QVector3D(0, -1, 0) # -y方向がMMDモデルの上半身の初期ベクトル
+    bf.rotation = QQuaternion.fromDirection(initial, direction)
     frames.append(bf)
     upper_body_rotation = bf.rotation
     
@@ -233,7 +42,7 @@ def positions_to_frames(pos, vis, frame_num=0, center_enabled=False, head_rotati
     direction = pos[0] - pos[7]
     up = QVector3D.crossProduct(direction, (pos[4] - pos[1])) 
     lower_body_orientation = QQuaternion.fromDirection(direction, up)
-    initial = QQuaternion.fromDirection(QVector3D(0, -1, 0), QVector3D(0, 0, 1)) # 下半身について、-yを正面、+zを上と定義
+    initial = QQuaternion.fromDirection(QVector3D(0, -1, 0), QVector3D(0, 0, 1))
     bf.rotation = lower_body_orientation * initial.inverted()
     lower_body_rotation = bf.rotation
     frames.append(bf)
@@ -260,9 +69,9 @@ def positions_to_frames(pos, vis, frame_num=0, center_enabled=False, head_rotati
     bf.name = b'\x8d\xb6\x98\x72' # '左腕'
     bf.frame = frame_num
     direction = pos[12] - pos[11]
-    up = QVector3D.crossProduct((pos[12] - pos[11]), (pos[13] - pos[12])) # <- ここがkalidokitとの違い
+    up = QVector3D.crossProduct((pos[12] - pos[11]), (pos[13] - pos[12]))
     orientation = QQuaternion.fromDirection(direction, up)
-    initial_orientation = QQuaternion.fromDirection(QVector3D(1.73, -1, 0), QVector3D(1, 1.73, 0))
+    initial_orientation = QQuaternion.fromDirection(QVector3D(1.73, -1, 0), QVector3D(1, 1.73, 0)) # 半端な値なのはたぶんAステートだから
     rotation = orientation * initial_orientation.inverted()
     # 左腕ポーンの回転から親ボーンの回転を差し引いてbf.rotationに格納する。
     # upper_body_rotation * bf.rotation = rotation なので、
@@ -394,6 +203,7 @@ def convert_position(pose_3d):
         positions.append(q)
     return positions
 
+
 def convert_position_mmpose(keypoints_3d):
     positions = []
     if keypoints_3d is None:
@@ -428,7 +238,7 @@ def convert_position_mediapipe(points_mp):
     for pm in points_mp:
         points_mp_array.append( dict2array(pm) )
 
-    # 17点のpointsに変換
+    # 17点のpointsに変換 -> これをせずにposition2frameできるように
     points = []
     
     points.append( (points_mp_array[24] + points_mp_array[23]) / 2 )
@@ -459,17 +269,6 @@ def convert_position_mediapipe(points_mp):
 
     # QVector3Dに変換
     for point in points:
-        positions.append( QVector3D(point[0], point[1], point[2]*-1) )
+        positions.append( QVector3D(point[0], point[1]*-1, point[2]*-1) )
 
-    return positions
-
-def convert_position_33(pose_3d):
-    positions = []
-    if pose_3d is None:
-        return positions
-    
-    for j in range(len(pose_3d)):
-        #q = QVector3D(pose_3d[j]['x'], -pose_3d[j]['y'], -pose_3d[j]['z']) #6/16 ①②適用説
-        q = QVector3D(pose_3d[j]['x'], -pose_3d[j]['y'], pose_3d[j]['z']) #6/18 何もしない説
-        positions.append(q)
     return positions
