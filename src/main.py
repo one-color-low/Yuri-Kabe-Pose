@@ -28,8 +28,7 @@ def pos2vmd():
 
     i = 0
     for frame in json:
-        keypoints_3d = frame # p_cam.htmlで使用
-        #positions = convert_position_mediapipe(keypoints_3d) # positionsをQVector3Dの配列に変換
+        keypoints_3d = frame 
         positions = convert_position_33(keypoints_3d)
         print("-----------------")
         print(keypoints_3d)
